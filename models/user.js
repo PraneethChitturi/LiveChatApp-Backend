@@ -42,8 +42,34 @@ const userSchema = new mongoose.Schema({
     },
     updatedAt:{
         type:Date,
+    },
+    verified:{
+        type:Boolean,
+        default:false,
+    },
+    otp:{
+        type:Number,
+    },
+    otp_expiry_time:{
+        type:Date
     }
 });
+
+userSchema.pre("save",async function(next){
+    //Only run this fxn if OTP is actually modified
+    if (!this.isModified("otp")) return next();
+
+    //Hash the OTP with the cost of 12
+    this.otp = await bcryptjs.hash(this.otp,12);
+    next();
+})
+
+userSchema.methods.correctOTP = async function(
+    candidateOTP, //Frontend Input
+    userOTP, //Decrypt password in backend and compare
+){
+    return await bcrypt.compare(candidateOTP,userOTP);
+}
 
 userSchema.methods.correctPassword = async function(
     candidatePassword, //Frontend Input
