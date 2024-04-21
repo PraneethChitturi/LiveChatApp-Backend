@@ -14,6 +14,7 @@ const xss = require("xss") //Sanitize untrusted HTML input from User, Malicious 
 const cors = require("cors"); //Allow cross-origin requests - if Frontend hosts on tawk.com and Backend on api.tawk.com - so these are different domains
                                 // so to communicate between them we use 'cors'
 
+const routes = require("./routes/index.js");
 const app = express();
 app.use(express.urlencoded({ //Parse uRL encoded bodies in Input
     extended:true
@@ -47,5 +48,6 @@ const limiter=rateLimit({ //Limits rate of Input
 
 app.use("/tawk",limiter) //Any requests that starts with /Tawk <- on that this limit will be implemented
 
-
+//
+app.use(routes)
 module.exports = app;

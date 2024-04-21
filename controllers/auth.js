@@ -8,7 +8,7 @@ const otpGenerator = require("../otp-generator")
 const signToken = (userId)=>{
     jwt.sign({userId},process.env.JWT_SECRET)
 }
-
+const mailService = require("../services/mailer")
 //Sign Up => Register - SendOTP - verifyOTP
 
 //api.tawk.com/auth/register
@@ -55,11 +55,25 @@ exports.sendOTP=async(req,res,next)=>{
 
     //
     await User.findByIdAndUpdate(userId,{
-        orp:new_otp,
+        otp:new_otp,
         otp_expiry_time,
     });
 
     //Send Mail
+    mailService.sendEmail({
+        from:"praneethchitturi01@gmail.com",
+        to:"example@gmail.com",
+        subject:"OTP For Tawk",
+        text: `Your OTP is ${new_otp}. This is valid for 10 Mins.`
+    })
+    /*.then(()=>{
+
+    }).catch((err)=>{
+        res.status(500).json({
+            status:"error",
+            message:"OTP not sent Successfully!"
+        })
+    })*/
 
     res.status(200).json({
         status:"success",
