@@ -51,7 +51,7 @@ const userSchema = new mongoose.Schema({
         default:false,
     },
     otp:{
-        type:Number,
+        type:String,
     },
     otp_expiry_time:{
         type:Date
@@ -60,51 +60,63 @@ const userSchema = new mongoose.Schema({
 
 userSchema.pre("save",async function(next){
     //Only run this fxn if OTP is actually modified
-    if (!this.isModified("otp")) return next();
+    if (!this.isModified("otp") || !this.otp) return next();
 
     //Hash the OTP with the cost of 12
-    this.otp = await bcryptjs.hash(this.otp,12);
+    this.otp = await bcrypt.hash(this.otp.toString(),12);
+    
     next();
 })
 
 userSchema.pre("save",async function(next){
     //Only run this fxn if OTP is actually modified
-    if (!this.isModified("password")) return next();
+    if (!this.isModified("password") || !this.password) return next();
 
     //Hash the OTP with the cost of 12
-    this.password = await bcryptjs.hash(this.password,12);
+    this.password = await bcrypt.hash(this.password.toString(),12);
     next();
 })
 
-userSchema.methods.correctOTP = async function(
-    candidateOTP, //Frontend Input
-    userOTP, //Decrypt password in backend and compare
-){
-    return await bcrypt.compare(candidateOTP,userOTP);
-}
+userSchema.methods.correctOTP = async function (candidateOTP, userOTP) {
+    
+    console.log("Breaking at Comparision")
+    console.log(candidateOTP,userOTP)
+    return await bcrypt.compare(candidateOTP, userOTP);
+  };
 
-userSchema.methods.correctPassword = async function(
-    candidatePassword, //Frontend Input
-    userPassword, //Decrypt password in backend and compare
-){
-    return await bcrypt.compare(candidatePassword,userPassword);
-}
+userSchema.methods.correctPassword = async function (
+    candidatePassword,
+    userPassword
+  ) {
+    return await bcrypt.compare(candidatePassword, userPassword);
+  };
 
 userSchema.methods.createPasswordResetToken = function () {
     const resetToken = crypto.randomBytes(32).toString("hex");
-
-    this.passwordResetToken = crypto.createHash("sha256").update(resetToken).digest("hex")
-
-    this.passwordResetExpires = Date.now() + 10*60*1000 //Gives user time of 10 mminutes to reset password
-
-
+  
+    this.passwordResetToken = crypto
+      .createHash("sha256")
+      .update(resetToken)
+      .digest("hex");
+  
+    this.passwordResetExpires = Date.now() + 10 * 60 * 1000;
+  
     return resetToken;
-}
+  };
 
-userSchema.methods.changedPasswordAfter = function (timestamp){
-    return timestamp < this.passwordChangedAt;
-}
 
-const User = new mongoose.model("User",userSchema);
+userSchema.methods.changedPasswordAfter = function (timestamp) {
+    if (this.passwordChangedAt) {
+      const changedTimeStamp = parseInt(
+        this.passwordChangedAt.getTime() / 1000,
+        10
+      );
+      return timestamp < changedTimeStamp;
+    }
+  
+    // FALSE MEANS NOT CHANGED
+    return false;
+  };
 
+const User = new mongoose.model("User", userSchema);
 module.exports = User;

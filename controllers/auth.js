@@ -1,12 +1,13 @@
-const jwt = require("jsonwebtoken") //Send user token for login useful to authentication
+const jwt = require("jsonwebtoken"); //Send user token for login useful to authentication
 const crypto = require("crypto")
 //Model for CRUD Options
 const User = require("../models/user");
 const filterObj = require("../utils/filterObj");
 const {promisify} = require("util")
-const otpGenerator = require("../otp-generator")
+const otpGenerator = require("otp-generator")
+const resetPassword = require("../Templates/Mail/resetPassword");
 const signToken = (userId)=>{
-    jwt.sign({userId},process.env.JWT_SECRET)
+    return jwt.sign({userId},process.env.JWT_SECRET)
 }
 const mailService = require("../services/mailer")
 //Sign Up => Register - SendOTP - verifyOTP
@@ -28,7 +29,7 @@ exports.register = async(req,res,next)=>{
             status:"error",
             message:"Email is already in use, Please login."
         })
-        return;
+        
     }
     else if(existing_user){
         await User.findOneAndUpdate({email:email},filteredBody,{new:true,validateModifiedOnly:true});
@@ -49,22 +50,26 @@ exports.register = async(req,res,next)=>{
 //Send OTP
 exports.sendOTP=async(req,res,next)=>{
     const {userId}=req;
-    const new_otp = otpGenerator(6,{lowerCaseAlphabets:false,upperCaseAlphabets:false,specialChars:false})
+    const new_otp = otpGenerator.generate(6,{lowerCaseAlphabets:false,upperCaseAlphabets:false,specialChars:false})
 
     const otp_expiry_time = Date.now() + 10*60*1000; //10mins after otp is sent
 
     //
-    await User.findByIdAndUpdate(userId,{
-        otp:new_otp,
+    const user = await User.findByIdAndUpdate(userId,{
         otp_expiry_time,
     });
 
+    user.otp = new_otp.toString();
+
+    await user.save({new:true,validateModifiedOnly:true});
+    console.log(new_otp);
     //Send Mail
     mailService.sendEmail({
-        from:"praneethchitturi01@gmail.com",
-        to:"example@gmail.com",
-        subject:"OTP For Tawk",
-        text: `Your OTP is ${new_otp}. This is valid for 10 Mins.`
+        sender:"mailtrap@demomailtrap.com",
+        recipient:user.email,
+        subject: "Verification OTP",
+        html: otp(user.firstName, new_otp),
+        attachments:[]
     })
     /*.then(()=>{
 
@@ -95,10 +100,14 @@ exports.verifyOTP = async (req,res,next)=>{
             status:"error",
             message:"Email is Invalid or OTP expired"
         })
-        return;
     }
-
-    if(!await user.correctOTP(otp,user.otp)){
+    if (user.verified) {
+        return res.status(400).json({
+          status: "error",
+          message: "Email is already verified",
+        });
+      }
+    if(!(await user.correctOTP(otp,user.otp))){
         res.status(400).json({
             status:"error",
             message:"OTP is incorrect"
@@ -115,8 +124,9 @@ exports.verifyOTP = async (req,res,next)=>{
     const token = signToken(user._id);
     res.status(200).json({
         status:"success",
-        message:"Logged in successfully",
+        message:"OTP verified Successfully!",
         token,
+        user_id: user._id,
     })
 }
 //Login User
@@ -147,6 +157,7 @@ exports.login = async (req,res,next)=>{
         status:"success",
         message:"Logged in successfully",
         token,
+        user_id:userDoc._id,
     })
 
 };
@@ -209,20 +220,33 @@ exports.forgotPassword = async (req,res,next)=>{
     const user = await User.findOne({email:req.body.email}) ;
 
     if(!user){
-        res.status(400).json({
+        return res.status(400).json({
             status:"error",
             message:"There is no user with given Email Address"
         })
-        return;
+       
     }
 
     //2) Generate random reset token
     const resetToken = user.createPasswordResetToken();
 
-    const resetURL =`https://tawk.com/auth/reset-password/?code=${resetToken}`;
+    const resetURL = `http://localhost:3000/auth/new-password?token=${resetToken}`
+    
 
+    user.passwordResetToken = crypto.createHash("sha256").update(resetToken).digest("hex");
+    user.passwordResetExpires = Date.now() + 10 * 60 * 1000;
+    await user.save({new:true,validateModifiedOnly:true});
+    console.log(resetURL,resetToken)
     try {
         //Sending Email with resetURL to User
+        mailService.sendEmail({
+            sender: "mailtrap@demomailtrap.com",
+            recipient: user.email,
+            subject: "Reset Password",
+            html: resetPassword(user.firstName, resetURL),
+            attachments: [],
+          });
+
         res.status(200).json({
             status:"success",
             message:"Reset Password Link sent to Email"
@@ -235,28 +259,28 @@ exports.forgotPassword = async (req,res,next)=>{
 
         await user.save({validateBeforeSave:false})
 
-        res.status(500).json({
+        return res.status(500).json({
             status:"error",
             message:"There was an error sending the email, Please try again later."
         })
-        return;
+        
     }
 
 }
 
 exports.resetPassword = async (req,res,next)=>{
     //1) Get User based on token
-    const hashedToken = crypto.createHash("sha256").update(req.params.token).digest("hex")
+    const hashedToken = crypto.createHash("sha256").update(req.body.token).digest("hex")
 
-    const user = User.findOne({passwordResetToken:hashedToken,passwordResetExpires:{$gt:Date.now()}})
+    const user = await User.findOne({passwordResetToken:hashedToken,passwordResetExpires:{$gt:Date.now()}})
 
     //2) If token has expired or user is out of time window 
     if (!user){
-        res.status(400).json({
+        return res.status(400).json({
             status:"error",
             message:"Token is invalid or Expired"
         })
-        return;
+        
     }
 
     //3) Updating Password and nulling our resetTokens

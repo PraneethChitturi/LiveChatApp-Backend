@@ -1,10 +1,13 @@
 //We use SendGrid to mail
-const sgMail = require("@sendgrid/mail")
+//const sgMail = require("@sendgrid/mail")
+const { MailtrapClient } = require("mailtrap");
 const dotenv = require("dotenv");
 dotenv.config({path:"../config.env"})
 
 //Sets the bearer token in the document
-sgMail.setApiKey(process.env.SG_KEY);
+//sgMail.setApiKey(process.env.SG_KEY);
+const ENDPOINT = "https://send.api.mailtrap.io/";
+const client = new MailtrapClient({ endpoint: ENDPOINT, token: '55465cab69f366d277a8f33276408ec9' });
 
 const sendSGMail = async ({
 recipient,
@@ -14,18 +17,17 @@ html,text,
 attachments,
 }) => {
     try{
-        const from = sender || "praneethchitturi01@gmail.com"
+        const from = {email: sender} //{email: sender || "praneethchitturi01@gmail.com"}
         const msg = {
-            to: recipient, //email of recipient
+            to: [{email:recipient}], //email of recipient
             from: from, //this will be our verified sender
-            subject,
+            subject: subject,
             html: html,
-            text:text,
+            //text:text,
             //text:"",
-            attachments
         }
 
-        return sgMail.send(msg)
+        return client.send(msg).then(console.log,console.error)
     } catch(error) {
         console.log(error)
     }
