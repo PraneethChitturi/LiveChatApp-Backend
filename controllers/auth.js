@@ -6,6 +6,7 @@ const filterObj = require("../utils/filterObj");
 const {promisify} = require("util")
 const otpGenerator = require("otp-generator")
 const resetPassword = require("../Templates/Mail/resetPassword");
+const otp = require("../Templates/Mail/otp");
 const signToken = (userId)=>{
     return jwt.sign({userId},process.env.JWT_SECRET)
 }
@@ -64,13 +65,16 @@ exports.sendOTP=async(req,res,next)=>{
     await user.save({new:true,validateModifiedOnly:true});
     console.log(new_otp);
     //Send Mail
+    try{
     mailService.sendEmail({
         sender:"mailtrap@demomailtrap.com",
-        recipient:user.email,
+        recipient: 'praneethchitturi12@gmail.com',//user.email,
         subject: "Verification OTP",
         html: otp(user.firstName, new_otp),
         attachments:[]
-    })
+    })}catch(error) { }
+    
+    
     /*.then(()=>{
 
     }).catch((err)=>{
