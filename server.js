@@ -6,6 +6,8 @@ const app = require("./app");
 const dotenv = require("dotenv")
 const http = require("http");
 const mongoose = require("mongoose")
+const {Server} = require("socket.io");
+const User = require("./models/user");
 
 dotenv.config({path:"./config.env"}) //Connecting to config.env file for critical info
 
@@ -16,6 +18,13 @@ process.on("uncaughtException",(err)=>{ //Event listener to catch errors
 })
 
 const server = http.createServer(app);
+
+const io = new Server(server,{
+    cors:{
+        origin:"https://localhost:3000",
+        methods:["GET","POST"]
+    }
+});
 
 const DB = process.env.DBURI.replace("<password>",process.env.DBPASSWORD)
 mongoose.connect(DB,{
@@ -41,4 +50,31 @@ const port = process.env.PORT || 8000
 
 server.listen(port,()=>{
     console.log(`App running on port ${port}`);
+})
+
+io.on("connection",async(socket)=>{
+    const user_id = socket.handshake.query["user_id"];
+
+    const socket_id = socket.id;
+
+    console.log(`User connect ${socket_id}`)
+
+    if (user_id){
+        await User.findByidAndUpdate(user_id,{
+            socket_id,
+        })
+    }
+
+    //We can write our socker event listeners here
+
+    socket.on("friend_request",async(data)=>{
+        console.log(data.to)
+
+        const to = await User.findById(data.to);
+
+        //Create Friend Request
+        io.to(to.socket_id).emit("new_friend_request",{
+            //
+        })
+    })
 })
