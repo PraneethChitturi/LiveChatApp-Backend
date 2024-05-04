@@ -9,7 +9,8 @@ const mongoose = require("mongoose")
 const {Server} = require("socket.io");
 const User = require("./models/user");
 const FriendRequest = require("./models/friendRequest");
-const path = require("path")
+const path = require("path");
+const OneToOneMessage = require("./models/OnetoOneMessage");
 
 dotenv.config({path:"./config.env"}) //Connecting to config.env file for critical info
 
@@ -23,7 +24,7 @@ const server = http.createServer(app);
 
 const io = new Server(server,{
     cors:{
-        origin:"https://localhost:3000",
+        origin:"*",
         methods:["GET","POST"]
     }
 });
@@ -63,7 +64,7 @@ io.on("connection",async(socket)=>{
     console.log(`User connect ${socket_id}`)
 
     if (Boolean(user_id)){
-        await User.findByidAndUpdate(user_id,{
+        await User.findByIdAndUpdate(user_id,{
             socket_id,status:"Online"
         })
     }
@@ -124,6 +125,45 @@ io.on("connection",async(socket)=>{
         })
     })
 
+    socket.on("get_direct_conversations",async({user_id},callback)=>{
+        const existing_conversations = await OneToOneMessage.find({
+            participants:{$all:[user_id]},
+        }).populate("participants","firstName lastName _id email status")
+
+        console.log(existing_conversations);
+
+        callback(existing_conversations);
+    })
+
+    socket.on("start_conversation",async (data)=>{
+        //data:{to,from}
+        const {to,from} = data;
+
+        //Check if there is an existing conversation in the past
+        const existing_conversation = await OneToOneMessage.find({
+            participants: {$size:2, $all:[to,from]}
+        }).populate("participants","firstName lastName _id email status")
+
+        console.log(existing_conversation[0],"Existing Conversation");
+
+        //if no existing conversation
+        if (existing_conversation.length===0){
+            let new_chat = await OneToOneMessage.create({
+                participants:[to,from],
+            })
+
+            new_chat = await OneToOneMessage.findById(new_chat._id).populate("participants","firstName lastName _id email status")
+
+            console.log(new_chat,": New convo created");
+            socket.emit("start_chat",new_chat);
+        }
+
+        //if there is existing conversation
+        else {
+            socket.emit("open_chat",existing_conversation[0])
+        }
+    });
+
     //To Handle Text/Link Messages
     socket.on("text_message",async (data)=>{
         console.log("Received Message:",data)
@@ -158,7 +198,7 @@ io.on("connection",async(socket)=>{
     socket.on("end",async (data)=>{
         //Find User by _id and set status to 'Offline'
         if(data.user_id){
-            await User.findByidAndUpdate(data.user_id,{status:"Offline"})
+            await User.findByIdAndUpdate(data.user_id,{status:"Offline"})
         }
 
         //broadcast user_disconnected
