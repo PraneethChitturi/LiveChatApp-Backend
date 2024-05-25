@@ -126,6 +126,11 @@ exports.verifyOTP = async (req,res,next)=>{
     await user.save({new:true,validateModifiedOnly:true});
 
     const token = signToken(user._id);
+    res.cookie("jwt",token,{
+        maxAge:15*24*60*60*1000,
+        httpOnly:true,
+        sameSite:"strict",
+    })
     res.status(200).json({
         status:"success",
         message:"OTP verified Successfully!",
@@ -157,6 +162,11 @@ exports.login = async (req,res,next)=>{
 
 
     const token = signToken(userDoc._id);
+    res.cookie("jwt",token,{
+        maxAge:15*24*60*60*1000,
+        httpOnly:true,
+        sameSite:"strict",
+    })
     res.status(200).json({
         status:"success",
         message:"Logged in successfully",
@@ -176,20 +186,17 @@ exports.protect = async (req,res,next)=>{
     // 'Bearer ksdlabsddksmd'
     if(req.headers.authorization && req.headers.authorization.startsWith("Bearer")){
         token = req.headers.authorization.split(" ")[1];
-
     }
-    else if(req.cookied.jwt) { //Sometimes can be sent in cookies
-        token = req.cookies.jwt;
-
+    else if(req.headers.cookie) { //Sometimes can be sent in cookies
+        token = req.headers.cookie.replace("jwt=","");
     }
     else {
-        req.status(400).json({
+        res.status(400).json({
             status:"error",
             message:"You are not logged in! Please log in to get access"
         })
         return;
     }
-
     //2) Verify if Token is correct or not
     const decoded = await promisify(jwt.verify)(token,process.env.JWT_SECRET);
 
@@ -300,6 +307,11 @@ exports.resetPassword = async (req,res,next)=>{
 
     //4) Log in the user and send new JWT
     const token = signToken(user._id);
+    res.cookie("jwt",token,{
+        maxAge:15*24*60*60*1000,
+        httpOnly:true,
+        sameSite:"strict",
+        })
     res.status(200).json({
         status:"success",
         message:"Password Reset Succesfull",

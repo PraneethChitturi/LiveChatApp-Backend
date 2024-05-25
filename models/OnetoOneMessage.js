@@ -18,6 +18,7 @@ const oneToOneMessageSchema= new mongoose.Schema({
             type:{
                 type:String,
                 enum:["Text","Media","Document","Link"],
+                default:"Text",
             },
             created_at:{
                 type:Date,
